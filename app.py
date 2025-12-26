@@ -211,7 +211,7 @@ with tab_search:
             filtered_df = df
 
         # 表示する列を指定（存在確認含む）
-        display_cols = [c for c in ["日付", "担当メンター", "生徒氏名", "学年", "文理", "志望科類", "模試名", "課題"] if c in df.columns]
+        display_cols = [c for c in ["生徒指名", "日付", "担当メンター", "学年", "文理", "志望科類", "模試名", "課題"] if c in df.columns]
         st.dataframe(filtered_df[display_cols], use_container_width=True)
 
         st.divider()
