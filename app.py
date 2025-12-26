@@ -231,7 +231,7 @@ with tab_search:
                     detail = json.loads(row['データJSON'])
                     
                     st.markdown(f"**{row.get('生徒氏名')}** ({row.get('日付')})")
-                    st.write(f"担当: {row.get('担当メンター')} / {row.get('文理')} / {row.get('志望科類')}")
+                    st.write(f"生徒情報: {row.get('担当メンター')} / {row.get('文理')} / {row.get('志望科類')}")
                     st.info(f"課題: {row.get('課題')}")
                     
                     st.write("■ 成績")
