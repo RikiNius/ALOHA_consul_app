@@ -211,12 +211,12 @@ with tab_search:
             filtered_df = df
 
         # 表示する列を指定（存在確認含む）
-        display_cols = [c for c in ["生徒指名", "日付", "担当メンター", "学年", "文理", "志望科類", "模試名", "課題"] if c in df.columns]
+        display_cols = [c for c in ["生徒指名", "日付", "担当メンター", "学年", "文理", "志望科類"] if c in df.columns]
         st.dataframe(filtered_df[display_cols], use_container_width=True)
 
         st.divider()
         st.write("▼ 詳細を確認したい行を選択")
-        
+
         if not filtered_df.empty:
             # ラベル用の関数
             def format_func(x):
