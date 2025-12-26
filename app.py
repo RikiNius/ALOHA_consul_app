@@ -33,7 +33,7 @@ except:
     DB_MODE = False
 
 # 保存する列の定義（ここを変更しました）
-COLUMNS = ["日付", "担当メンター", "生徒氏名", "学年", "文理", "志望科類", "模試名", "課題", "データJSON"]
+COLUMNS = ["生徒氏名", "担当メンター", "日付", "学年", "文理", "志望科類", "模試名", "課題", "データJSON"]
 
 # データ読み込み関数
 def load_data():
@@ -105,7 +105,7 @@ with tab_new:
             stream = st.radio("文理", ["理系", "文系"], horizontal=True, key="in_stream")
         with c2:
             date_val = st.date_input("実施日", datetime.date.today(), key="in_date")
-            grade = st.selectbox("学年", ["高3", "高2", "高1", "既卒"], key="in_grade")
+            grade = st.selectbox("学年", ["中3", "高1", "高2", "高3", "既卒"], key="in_grade")
             default_target = "理科一類" if stream == "理系" else "文科一類"
             target = st.text_input("志望科類", value=default_target, key="in_target")
 
@@ -175,9 +175,9 @@ with tab_new:
             }
             # 新しい列構成でデータを作成
             new_row = pd.DataFrame([{
-                "日付": date_val.strftime('%Y-%m-%d'),
-                "担当メンター": mentor_name,
                 "生徒氏名": student_name,
+                "担当メンター": mentor_name,
+                "日付": date_val.strftime('%Y-%m-%d'),
                 "学年": grade,
                 "文理": stream,
                 "志望科類": target,
@@ -221,9 +221,9 @@ with tab_search:
             # ラベル用の関数
             def format_func(x):
                 row = filtered_df.loc[x]
-                return f"{row.get('日付', '')} - {row.get('生徒氏名', '')}"
+                return f"{row.get('生徒氏名', '')} - {row.get('日付', '')}"
 
-            selected_indices = st.selectbox("詳細を表示（上から順）", filtered_df.index.tolist(), format_func=format_func)
+            selected_indices = st.selectbox("詳細を表示する生徒を選択（上から順）", filtered_df.index.tolist(), format_func=format_func)
             
             if selected_indices is not None:
                 row = filtered_df.loc[selected_indices]
@@ -237,7 +237,7 @@ with tab_search:
                     st.write("■ 成績")
                     st.json(detail.get('scores', {}))
                     
-                    st.write("■ アクション")
+                    st.write("■ ネクストアクション")
                     for act in detail.get('actions', []):
                         st.write(f"- 【{act['subject']}】: {act['specificTask']} ({act['deadline']})")
                 except:
