@@ -223,7 +223,7 @@ with tab_search:
                 row = filtered_df.loc[x]
                 return f"{row.get('生徒氏名', '')} - {row.get('日付', '')}"
 
-            selected_indices = st.selectbox("詳細を表示する生徒を選択（上から順）", filtered_df.index.tolist(), format_func=format_func)
+            selected_indices = st.selectbox("詳細を表示する生徒-日付を選択（上から順）", filtered_df.index.tolist(), format_func=format_func)
             
             if selected_indices is not None:
                 row = filtered_df.loc[selected_indices]
@@ -235,7 +235,14 @@ with tab_search:
                     st.info(f"課題: {row.get('課題')}")
                     
                     st.write("■ 成績")
-                    st.json(detail.get('scores', {}))
+                    raw_scores = detail.get('scores', {})
+                    formatted_scores = {}
+                    for key, val in raw_scores.items():
+                        # 値が入っているものだけ、キーを日本語に変換して表示
+                        if val:
+                            label = SCORE_LABELS.get(key, key)
+                            formatted_scores[label] = val
+                    st.json(formatted_scores)
                     
                     st.write("■ ネクストアクション")
                     for act in detail.get('actions', []):
