@@ -251,6 +251,12 @@ with tab_search:
                         
                         st.write("■ 成績")
                         
+                        # --- 修正: 模試名の表示を追加 ---
+                        exam_name_val = row.get('模試名')
+                        if exam_name_val:
+                            st.caption(f"参照模試: {exam_name_val}")
+                        # -----------------------------
+                        
                         raw_scores = detail.get('scores', {})
                         formatted_scores = {}
                         for key, val in raw_scores.items():
