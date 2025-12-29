@@ -18,10 +18,20 @@ STANDARD_ADVICE = {
     'past_exam': '【過去問】解くだけでなく復習に3倍の時間をかける'
 }
 
-# 教科リストの更新（ご要望に合わせて整理）
 SUBJECTS = {
     '理系': ['英語', '数学(理系)', '国語', '物理', '化学', '生物'],
     '文系': ['英語', '数学(文系)', '国語', '世界史', '日本史', '地理']
+}
+
+# 表示用のラベル変換マップ
+SCORE_LABELS = {
+    'eng': '英語',
+    'math': '数学',
+    'jp': '国語',
+    'sci1': '理科①',
+    'sci2': '理科②',
+    'soc1': '社会①',
+    'soc2': '社会②'
 }
 
 # --- データベース接続 (Google Sheets) ---
@@ -32,14 +42,18 @@ try:
 except:
     DB_MODE = False
 
-# 保存する列の定義（ここを変更しました）
-COLUMNS = ["生徒氏名", "担当メンター", "日付", "学年", "文理", "志望科類", "模試名", "課題", "データJSON"]
+COLUMNS = ["日付", "担当メンター", "生徒氏名", "学年", "文理", "志望科類", "模試名", "課題", "データJSON"]
 
 # データ読み込み関数
 def load_data():
     if DB_MODE:
         try:
             df = conn.read(worksheet="logs", ttl=0)
+            # --- 修正: 不足している列があれば自動追加する処理 ---
+            # これにより、スプレッドシートに列がなくてもアプリ上で表示・操作可能になります
+            for col in COLUMNS:
+                if col not in df.columns:
+                    df[col] = None
             return df
         except Exception:
             return pd.DataFrame(columns=COLUMNS)
@@ -51,9 +65,8 @@ def load_data():
 # データ保存関数
 def save_data(new_row_df):
     current_df = load_data()
-    # 列が足りない場合の対策（結合時のズレ防止）
+    # load_dataで列補完を行っているため、ここでの補完ループは削除しても良いが安全のため維持
     if not current_df.empty:
-        # 新しい定義にある列が現在のDFにない場合、空列を追加
         for col in COLUMNS:
             if col not in current_df.columns:
                 current_df[col] = None
@@ -105,7 +118,7 @@ with tab_new:
             stream = st.radio("文理", ["理系", "文系"], horizontal=True, key="in_stream")
         with c2:
             date_val = st.date_input("実施日", datetime.date.today(), key="in_date")
-            grade = st.selectbox("学年", ["中3", "高1", "高2", "高3", "既卒"], key="in_grade")
+            grade = st.selectbox("学年", ["高3", "高2", "高1", "既卒"], key="in_grade")
             default_target = "理科一類" if stream == "理系" else "文科一類"
             target = st.text_input("志望科類", value=default_target, key="in_target")
 
@@ -119,7 +132,6 @@ with tab_new:
     with sc[1]: scores['math'] = st.text_input("数学", key="in_s_math")
     with sc[2]: scores['jp'] = st.text_input("国語", key="in_s_jp")
     
-    # 教科入力欄の調整
     if stream == "理系":
         with sc[3]: scores['sci1'] = st.text_input("理科①", key="in_s_sci1")
         with sc[4]: scores['sci2'] = st.text_input("理科②", key="in_s_sci2")
@@ -138,7 +150,6 @@ with tab_new:
             ac1, ac2, ac3 = st.columns([2, 2, 2])
             with ac1:
                 subj_list = SUBJECTS[stream]
-                # リストにない教科が選択されていた場合のリセット処理
                 s_idx = subj_list.index(action['subject']) if action['subject'] in subj_list else 0
                 st.session_state.actions[i]['subject'] = st.selectbox("教科", subj_list, index=s_idx, key=f"s_{i}")
             with ac2:
@@ -173,11 +184,10 @@ with tab_new:
                 "actions": st.session_state.actions,
                 "stream": stream
             }
-            # 新しい列構成でデータを作成
             new_row = pd.DataFrame([{
-                "生徒氏名": student_name,
-                "担当メンター": mentor_name,
                 "日付": date_val.strftime('%Y-%m-%d'),
+                "担当メンター": mentor_name,
+                "生徒氏名": student_name,
                 "学年": grade,
                 "文理": stream,
                 "志望科類": target,
@@ -202,7 +212,6 @@ with tab_search:
         search_name = st.text_input("生徒名で検索", placeholder="名前の一部を入力")
         
         if search_name:
-            # 氏名列が存在するか確認してから検索
             if '生徒氏名' in df.columns:
                 filtered_df = df[df['生徒氏名'].str.contains(search_name, na=False)]
             else:
@@ -210,45 +219,55 @@ with tab_search:
         else:
             filtered_df = df
 
-        # 表示する列を指定（存在確認含む）
-        display_cols = [c for c in ["生徒指名", "日付", "担当メンター", "学年", "文理", "志望科類"] if c in df.columns]
+        display_cols = [c for c in ["日付", "担当メンター", "生徒氏名", "学年", "文理", "志望科類", "模試名", "課題"] if c in df.columns]
         st.dataframe(filtered_df[display_cols], use_container_width=True)
 
         st.divider()
         st.write("▼ 詳細を確認したい行を選択")
-
+        
         if not filtered_df.empty:
-            # ラベル用の関数
             def format_func(x):
                 row = filtered_df.loc[x]
-                return f"{row.get('生徒氏名', '')} - {row.get('日付', '')}"
+                return f"{row.get('日付', '')} - {row.get('生徒氏名', '')}"
 
-            selected_indices = st.selectbox("詳細を表示する生徒-日付を選択（上から順）", filtered_df.index.tolist(), format_func=format_func)
+            selected_indices = st.selectbox("詳細を表示（上から順）", filtered_df.index.tolist(), format_func=format_func)
             
             if selected_indices is not None:
                 row = filtered_df.loc[selected_indices]
-                try:
-                    detail = json.loads(row['データJSON'])
-                    
-                    st.markdown(f"**{row.get('生徒氏名')}** ({row.get('日付')})")
-                    st.write(f"生徒情報: {row.get('担当メンター')} / {row.get('文理')} / {row.get('志望科類')}")
-                    st.info(f"課題: {row.get('課題')}")
-                    
-                    st.write("■ 成績")
-                    raw_scores = detail.get('scores', {})
-                    formatted_scores = {}
-                    for key, val in raw_scores.items():
-                        # 値が入っているものだけ、キーを日本語に変換して表示
-                        if val:
-                            label = SCORE_LABELS.get(key, key)
-                            formatted_scores[label] = val
-                    st.json(formatted_scores)
-                    
-                    st.write("■ ネクストアクション")
-                    for act in detail.get('actions', []):
-                        st.write(f"- 【{act['subject']}】: {act['specificTask']} ({act['deadline']})")
-                except:
-                    st.error("詳細データの読み込みに失敗しました")
+                
+                # --- 修正: 詳細データの安全な読み込み ---
+                json_data = row.get('データJSON')
+                
+                if pd.isna(json_data) or json_data == "" or json_data is None:
+                    st.warning("⚠️ この記録には詳細データ（成績・アクションなど）が保存されていません。")
+                    st.write(f"概要: {row.get('課題', 'なし')}")
+                else:
+                    try:
+                        detail = json.loads(json_data)
+                        
+                        st.markdown(f"**{row.get('生徒氏名')}** ({row.get('日付')})")
+                        st.write(f"担当: {row.get('担当メンター')} / {row.get('文理')} / {row.get('志望科類')}")
+                        st.info(f"課題: {row.get('課題')}")
+                        
+                        st.write("■ 成績")
+                        
+                        raw_scores = detail.get('scores', {})
+                        formatted_scores = {}
+                        for key, val in raw_scores.items():
+                            if val:
+                                label = SCORE_LABELS.get(key, key)
+                                formatted_scores[label] = val
+                                
+                        st.json(formatted_scores)
+                        
+                        st.write("■ アクション")
+                        for act in detail.get('actions', []):
+                            st.write(f"- 【{act['subject']}】: {act['specificTask']} ({act['deadline']})")
+                            
+                    except json.JSONDecodeError:
+                        st.error("データの形式が正しくありません。")
+                    except Exception as e:
+                        st.error(f"詳細データの読み込み中にエラーが発生しました: {e}")
 
 # ==========================================
 # 3. プレビュー（出力）タブ
