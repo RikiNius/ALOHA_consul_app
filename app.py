@@ -251,11 +251,11 @@ with tab_search:
                         
                         st.write("■ 成績")
                         
-                        # --- 修正: 模試名の表示を追加 ---
+                        # --- 修正: 模試名を強調表示し、空データ(nan)の時は表示しない ---
                         exam_name_val = row.get('模試名')
-                        if exam_name_val:
-                            st.caption(f"参照模試: {exam_name_val}")
-                        # -----------------------------
+                        if not pd.isna(exam_name_val) and str(exam_name_val).strip() != "":
+                             st.info(f"📊 参照模試: **{exam_name_val}**")
+                        # --------------------------------------------------------
                         
                         raw_scores = detail.get('scores', {})
                         formatted_scores = {}
