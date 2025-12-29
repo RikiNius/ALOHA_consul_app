@@ -4,7 +4,7 @@ import datetime
 import json
 
 # --- 設定 ---
-st.set_page_config(page_title="UTokyo Mentoring Base", layout="wide")
+st.set_page_config(page_title="ALOHA Mentoring Base", layout="wide")
 
 # --- マスタデータ（定数） ---
 STANDARD_ADVICE = {
