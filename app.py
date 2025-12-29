@@ -219,7 +219,7 @@ with tab_search:
         else:
             filtered_df = df
 
-        display_cols = [c for c in ["日付", "担当メンター", "生徒氏名", "学年", "文理", "志望科類", "模試名", "課題"] if c in df.columns]
+        display_cols = [c for c in ["日付", "担当メンター", "生徒氏名", "学年", "文理", "志望科類", "課題"] if c in df.columns]
         st.dataframe(filtered_df[display_cols], use_container_width=True)
 
         st.divider()
