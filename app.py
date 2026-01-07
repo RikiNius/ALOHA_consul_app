@@ -15,7 +15,7 @@ SUBJECTS = {
 # 表示用のラベル変換マップ（二次試験用）
 SCORE_LABELS_NIJI = {
     'eng': '英語', 'math': '数学',
-    'jp_mod': '現代文', 'jp_anc': '古文', 'jp_chi': '漢文', # 国語を3分割
+    'jp_mod': '現代文', 'jp_anc': '古文', 'jp_chi': '漢文',
     'sci1': '理科①', 'sci2': '理科②',
     'soc1': '社会①', 'soc2': '社会②'
 }
@@ -24,10 +24,13 @@ SCORE_LABELS_NIJI = {
 SCORE_LABELS_KYOTSU = {
     'eng_r': '英語R', 'eng_l': '英語L',
     'math_1': '数IA', 'math_2': '数IIBC',
-    'jp_mod': '現代文', 'jp_anc': '古文', 'jp_chi': '漢文', # 国語を3分割
+    'jp_mod': '現代文', 'jp_anc': '古文', 'jp_chi': '漢文',
     'info': '情報',
+    # 文系用
     'k_soc1': '社会①', 'k_soc2': '社会②',
     'k_sci_base1': '理科基礎①', 'k_sci_base2': '理科基礎②',
+    # 理系用
+    'k_soc_r': '社会', 
     'k_sci1': '理科①', 'k_sci2': '理科②'
 }
 
@@ -90,19 +93,23 @@ def clear_inputs():
     # テキスト入力系のキー
     text_keys = [
         "in_mentor", "in_student", "in_target", "in_exam", "in_issue",
-        # 二次試験 (国語3つに変更)
+        # 二次試験
         "in_s_eng", "in_s_math", "in_s_jp_mod", "in_s_jp_anc", "in_s_jp_chi", 
         "in_s_sci1", "in_s_sci2", "in_s_soc1", "in_s_soc2",
-        # 共通テスト (国語3つに変更)
+        # 共通テスト
         "in_k_eng_r", "in_k_eng_l", "in_k_math_1", "in_k_math_2", 
         "in_k_jp_mod", "in_k_jp_anc", "in_k_jp_chi", "in_k_info",
-        "in_k_soc1", "in_k_soc2", "in_k_sci_base1", "in_k_sci_base2", "in_k_sci1", "in_k_sci2"
+        # 文系用
+        "in_k_soc1", "in_k_soc2", "in_k_sci_base1", "in_k_sci_base2",
+        # 理系用
+        "in_k_soc_r", "in_k_sci1", "in_k_sci2"
     ]
     
     for key in text_keys:
         if key in st.session_state:
             st.session_state[key] = ""
 
+    # 学年の初期値（リセット時は高3に戻す設定）
     if "in_grade" in st.session_state:
         st.session_state["in_grade"] = "高3"
     
@@ -148,7 +155,13 @@ with tab_new:
             stream = st.radio("文理", ["理系", "文系"], horizontal=True, key="in_stream")
         with c2:
             date_val = st.date_input("実施日", datetime.date.today(), key="in_date")
-            grade = st.selectbox("学年", ["高3", "高2", "高1", "既卒"], key="in_grade")
+            
+            # --- 修正: 学年の選択肢変更 ---
+            grade_options = ["中1", "中2", "中3", "高1", "高2", "高3", "既卒"]
+            # デフォルトで「高3」を選択状態にする（リスト内のindexを取得）
+            default_grade_idx = grade_options.index("高3")
+            grade = st.selectbox("学年", grade_options, index=default_grade_idx, key="in_grade")
+            
             default_target = "理科一類" if stream == "理系" else "文科一類"
             target = st.text_input("志望科類", value=default_target, key="in_target")
 
@@ -214,15 +227,16 @@ with tab_new:
         ks1, ks2, ks3, ks4 = st.columns(4)
         
         if stream == "文系":
+            # 文系: 社会2, 理科基礎2
             with ks1: scores['k_soc1'] = st.text_input("社会①", key="in_k_soc1")
             with ks2: scores['k_soc2'] = st.text_input("社会②", key="in_k_soc2")
             with ks3: scores['k_sci_base1'] = st.text_input("理科基礎①", key="in_k_sci_base1")
             with ks4: scores['k_sci_base2'] = st.text_input("理科基礎②", key="in_k_sci_base2")
         else:
-            with ks1: scores['k_soc1'] = st.text_input("社会①", key="in_k_soc1_r")
-            with ks2: scores['k_soc2'] = st.text_input("社会②", key="in_k_soc2_r")
-            with ks3: scores['k_sci1'] = st.text_input("理科①", key="in_k_sci1")
-            with ks4: scores['k_sci2'] = st.text_input("理科②", key="in_k_sci2")
+            # 理系: 社会1, 理科2
+            with ks1: scores['k_soc_r'] = st.text_input("社会", key="in_k_soc_r")
+            with ks2: scores['k_sci1'] = st.text_input("理科①", key="in_k_sci1")
+            with ks3: scores['k_sci2'] = st.text_input("理科②", key="in_k_sci2")
 
     current_issue = st.text_area("課題認識", key="in_issue")
 
@@ -235,7 +249,6 @@ with tab_new:
             ac1, ac2, ac3 = st.columns([2, 1, 2])
             with ac1:
                 subj_list = SUBJECTS[stream]
-                # 教科リストに含まれていない教科が保存されていた場合の対策
                 try:
                     s_idx = subj_list.index(action['subject'])
                 except ValueError:
