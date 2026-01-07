@@ -7,17 +7,6 @@ import json
 st.set_page_config(page_title="ALOHA Mentoring Base", layout="wide")
 
 # --- マスタデータ（定数） ---
-STANDARD_ADVICE = {
-    'custom': '（自由入力）',
-    'math_partial': '【数学】完答より部分点を狙う記述力の強化',
-    'eng_speed': '【英語】要約問題でのロジック把握とスピード向上',
-    'eng_listen': '【英語】リスニングは毎日実施（シャドーイング）',
-    'jp_classic': '【国語】古文単語・文法の基礎抜け漏れチェック',
-    'sci_basic': '【理科】標準問題での計算ミスをゼロにする',
-    'soc_flow': '【社会】用語暗記より歴史の流れ・因果関係の理解',
-    'past_exam': '【過去問】解くだけでなく復習に3倍の時間をかける'
-}
-
 SUBJECTS = {
     '理系': ['英語', '数学(理系)', '国語', '物理', '化学', '生物'],
     '文系': ['英語', '数学(文系)', '国語', '世界史', '日本史', '地理']
@@ -31,12 +20,17 @@ SCORE_LABELS_NIJI = {
 }
 
 # 表示用のラベル変換マップ（共通テスト用）
+# ※文理で入力項目が変わるため、すべての可能性を網羅しておきます
 SCORE_LABELS_KYOTSU = {
     'eng_r': '英語R', 'eng_l': '英語L',
     'math_1': '数IA', 'math_2': '数IIBC',
-    'jp': '国語',
-    'sub_1': '理/社①', 'sub_2': '理/社②',
-    'info': '情報'
+    'jp': '国語', 'info': '情報',
+    # 文系用
+    'k_soc1': '社会①', 'k_soc2': '社会②',
+    'k_sci_base1': '理科基礎①', 'k_sci_base2': '理科基礎②',
+    # 理系用
+    'k_sci1': '理科①', 'k_sci2': '理科②'
+    # 理系の社会①②は k_soc1, k_soc2 を共用
 }
 
 # --- データベース接続 (Google Sheets) ---
@@ -91,19 +85,20 @@ def init_session_state():
     # アクションリストの初期化
     if 'actions' not in st.session_state:
         st.session_state.actions = [
-            {'subject': '英語', 'priority': '高', 'standardAdvice': 'eng_listen', 'customAdvice': '', 'specificTask': '鉄壁 Section 1-5', 'deadline': '次回まで'}
+            {'subject': '英語', 'priority': '高', 'specificTask': '鉄壁 Section 1-5', 'deadline': '次回まで'}
         ]
 
 def clear_inputs():
     """入力フォームのリセット処理"""
-    # session_stateのキーをリストアップして削除（ウィジェットの値をクリア）
     keys_to_clear = [
         "in_mentor", "in_student", "in_stream", "in_date", "in_grade", "in_target",
         "in_exam", "in_exam_type", "in_issue",
         # 二次試験用
         "in_s_eng", "in_s_math", "in_s_jp", "in_s_sci1", "in_s_sci2", "in_s_soc1", "in_s_soc2",
-        # 共通テスト用
-        "in_k_eng_r", "in_k_eng_l", "in_k_math_1", "in_k_math_2", "in_k_jp", "in_k_sub1", "in_k_sub2", "in_k_info"
+        # 共通テスト用（共通）
+        "in_k_eng_r", "in_k_eng_l", "in_k_math_1", "in_k_math_2", "in_k_jp", "in_k_info",
+        # 共通テスト用（文理別）
+        "in_k_soc1", "in_k_soc2", "in_k_sci_base1", "in_k_sci_base2", "in_k_sci1", "in_k_sci2"
     ]
     for key in keys_to_clear:
         if key in st.session_state:
@@ -111,7 +106,7 @@ def clear_inputs():
     
     # アクションも初期状態に戻す
     st.session_state.actions = [
-        {'subject': '英語', 'priority': '高', 'standardAdvice': 'eng_listen', 'customAdvice': '', 'specificTask': '鉄壁 Section 1-5', 'deadline': '次回まで'}
+        {'subject': '英語', 'priority': '高', 'specificTask': '鉄壁 Section 1-5', 'deadline': '次回まで'}
     ]
 
 init_session_state()
@@ -131,7 +126,7 @@ with tab_new:
     def add_action(stream_val):
         initial_subject = SUBJECTS[stream_val][0]
         st.session_state.actions.append({
-            'subject': initial_subject, 'priority': '中', 'standardAdvice': 'custom', 'customAdvice': '', 'specificTask': '', 'deadline': '1週間後'
+            'subject': initial_subject, 'priority': '中', 'specificTask': '', 'deadline': '1週間後'
         })
     def remove_action(index):
         st.session_state.actions.pop(index)
@@ -140,14 +135,12 @@ with tab_new:
     with st.container():
         c1, c2 = st.columns(2)
         with c1:
-            # keyを指定することで clear_inputs() で制御可能にする
             mentor_name = st.text_input("担当メンター", key="in_mentor")
             student_name = st.text_input("生徒氏名", key="in_student")
             stream = st.radio("文理", ["理系", "文系"], horizontal=True, key="in_stream")
         with c2:
             date_val = st.date_input("実施日", datetime.date.today(), key="in_date")
             grade = st.selectbox("学年", ["高3", "高2", "高1", "既卒"], key="in_grade")
-            # デフォルト値の計算（文理選択が変わった直後は反映されないことがあるため、keyの状態を見る）
             default_target = "理科一類" if stream == "理系" else "文科一類"
             target = st.text_input("志望科類", value=default_target, key="in_target")
 
@@ -163,7 +156,7 @@ with tab_new:
 
     scores = {}
     
-    # --- 修正: 模試種別による入力欄切り替え ---
+    # === 模試入力エリア ===
     if exam_type == "東大二次(本番レベル)":
         sc = st.columns(5)
         with sc[0]: scores['eng'] = st.text_input("英語", key="in_s_eng")
@@ -176,9 +169,12 @@ with tab_new:
         else:
             with sc[3]: scores['soc1'] = st.text_input("社会①", key="in_s_soc1")
             with sc[4]: scores['soc2'] = st.text_input("社会②", key="in_s_soc2")
+    
     else:
-        # 共通テスト用レイアウト
-        kc1, kc2, kc3, kc4 = st.columns(4)
+        # === 共通テスト（変更箇所） ===
+        # 共通科目
+        st.markdown("**基礎科目**")
+        kc1, kc2, kc3 = st.columns(3)
         with kc1: 
             scores['eng_r'] = st.text_input("英語R", key="in_k_eng_r")
             scores['eng_l'] = st.text_input("英語L", key="in_k_eng_l")
@@ -188,9 +184,23 @@ with tab_new:
         with kc3:
             scores['jp'] = st.text_input("国語", key="in_k_jp")
             scores['info'] = st.text_input("情報", key="in_k_info")
-        with kc4:
-            scores['sub_1'] = st.text_input("理/社①", key="in_k_sub1")
-            scores['sub_2'] = st.text_input("理/社②", key="in_k_sub2")
+        
+        # 文理別科目
+        st.markdown("**理科・社会**")
+        ks1, ks2, ks3, ks4 = st.columns(4)
+        
+        if stream == "文系":
+            # 文系: 社会①, 社会②, 理科基礎①, 理科基礎②
+            with ks1: scores['k_soc1'] = st.text_input("社会①", key="in_k_soc1")
+            with ks2: scores['k_soc2'] = st.text_input("社会②", key="in_k_soc2")
+            with ks3: scores['k_sci_base1'] = st.text_input("理科基礎①", key="in_k_sci_base1")
+            with ks4: scores['k_sci_base2'] = st.text_input("理科基礎②", key="in_k_sci_base2")
+        else:
+            # 理系: 社会①, 社会②, 理科①, 理科②
+            with ks1: scores['k_soc1'] = st.text_input("社会①", key="in_k_soc1_r") # keyを変えて重複回避
+            with ks2: scores['k_soc2'] = st.text_input("社会②", key="in_k_soc2_r")
+            with ks3: scores['k_sci1'] = st.text_input("理科①", key="in_k_sci1")
+            with ks4: scores['k_sci2'] = st.text_input("理科②", key="in_k_sci2")
 
     current_issue = st.text_area("課題認識", key="in_issue")
 
@@ -200,7 +210,8 @@ with tab_new:
     st.caption("ネクストアクション")
     for i, action in enumerate(st.session_state.actions):
         with st.expander(f"Action {i+1}: {action['subject']}", expanded=True):
-            ac1, ac2, ac3 = st.columns([2, 2, 2])
+            # 「型」を削除し、レイアウト調整
+            ac1, ac2, ac3 = st.columns([2, 1, 2])
             with ac1:
                 subj_list = SUBJECTS[stream]
                 s_idx = subj_list.index(action['subject']) if action['subject'] in subj_list else 0
@@ -212,20 +223,8 @@ with tab_new:
             with ac3:
                 st.session_state.actions[i]['deadline'] = st.text_input("期限", action['deadline'], key=f"d_{i}")
             
-            # アドバイス型の選択
-            ak = list(STANDARD_ADVICE.keys())
-            # 既存データにないキー対策
-            curr_adv = action.get('standardAdvice', 'custom')
-            a_idx = ak.index(curr_adv) if curr_adv in ak else 0
-            
-            selected_advice_key = st.selectbox("型", ak, format_func=lambda x: STANDARD_ADVICE[x], index=a_idx, key=f"a_{i}")
-            st.session_state.actions[i]['standardAdvice'] = selected_advice_key
-
-            # --- 修正: 自由入力欄の追加 ---
-            if selected_advice_key == 'custom':
-                st.session_state.actions[i]['customAdvice'] = st.text_input("自由アドバイス内容", value=action.get('customAdvice', ''), placeholder="例: 青チャートの例題を1日3問ペースで進める", key=f"ca_{i}")
-            
-            st.session_state.actions[i]['specificTask'] = st.text_input("具体的タスク名", action['specificTask'], key=f"t_{i}")
+            # タスク内容は大きく表示
+            st.session_state.actions[i]['specificTask'] = st.text_input("具体的タスク", action['specificTask'], key=f"t_{i}", placeholder="例: 鉄壁Section1-5を毎日実施")
             
             if st.button("削除", key=f"del_{i}"):
                 remove_action(i)
@@ -245,7 +244,7 @@ with tab_new:
             full_data = {
                 "mentor": mentor_name,
                 "scores": scores,
-                "exam_type": exam_type, # 模試タイプも保存
+                "exam_type": exam_type,
                 "actions": st.session_state.actions,
                 "stream": stream
             }
@@ -263,7 +262,6 @@ with tab_new:
             
             if save_data(new_row):
                 st.success("保存しました！")
-                # --- 修正: 保存後にフォームをリセット ---
                 clear_inputs()
                 st.rerun()
             else:
@@ -293,7 +291,6 @@ with tab_search:
         else:
             filtered_df = df
 
-        # インデックスを降順（新しい順）にする
         filtered_df = filtered_df.sort_index(ascending=False)
 
         display_cols = [c for c in ["日付", "担当メンター", "生徒氏名", "学年", "文理", "志望科類", "課題"] if c in df.columns]
@@ -326,19 +323,15 @@ with tab_search:
                         
                         st.write("■ 成績")
                         exam_name_val = row.get('模試名')
-                        exam_type_val = detail.get('exam_type', '東大二次(本番レベル)') # 互換性維持
+                        exam_type_val = detail.get('exam_type', '東大二次(本番レベル)')
                         
                         if not pd.isna(exam_name_val) and str(exam_name_val).strip() != "":
                              st.markdown(f"📊 **{exam_name_val}** ({exam_type_val})")
                         
                         raw_scores = detail.get('scores', {})
                         
-                        # --- 修正: 成績を表で見やすく表示 ---
                         if raw_scores:
-                            # 表示用ラベルマップの切り替え
                             label_map = SCORE_LABELS_NIJI if exam_type_val == "東大二次(本番レベル)" else SCORE_LABELS_KYOTSU
-                            
-                            # 辞書をDataFrame変換用に整形
                             score_display_data = {label_map.get(k, k): v for k, v in raw_scores.items() if v}
                             
                             if score_display_data:
@@ -348,17 +341,11 @@ with tab_search:
                                 st.caption("点数データなし")
 
                         st.write("■ アクション")
+                        # 修正箇所: インデントを正しく修正済み
                         for act in detail.get('actions', []):
-                            # アドバイスの表示
-                            adv_key = act.get('standardAdvice', 'custom')
-                            if adv_key == 'custom':
-                                # 自由入力の内容を表示
-                                adv_text = act.get('customAdvice', '（詳細なし）')
-                            else:
-                                adv_text = STANDARD_ADVICE.get(adv_key, "")
-                            
+                            # 「型」を表示せず、タスクと期限のみ表示
                             st.write(f"- 【{act['subject']}】 **{act['specificTask']}**")
-                            st.caption(f"　 └ 方針: {adv_text} (期限: {act['deadline']})")
+                            st.caption(f"　 └ 優先度: {act.get('priority','-')} / 期限: {act['deadline']}")
                             
                     except json.JSONDecodeError:
                         st.error("データの形式が正しくありません。")
@@ -369,7 +356,6 @@ with tab_search:
 with tab_preview:
     st.subheader("レポート出力")
     
-    # --- 修正: 出力対象の選択 ---
     report_source = st.radio("出力するデータを選択", ["現在入力中の内容", "過去の保存データ"], horizontal=True)
 
     target_data = {}
@@ -386,12 +372,10 @@ with tab_preview:
             "actions": st.session_state.actions
         }
     else:
-        # 過去データの選択UI
         df = load_data()
         if df.empty:
             st.warning("保存されたデータがありません。")
         else:
-            # 検索タブと同様の選択ロジック
             df_sorted = df.sort_index(ascending=False)
             def format_report_func(x):
                 r = df_sorted.loc[x]
@@ -428,14 +412,8 @@ with tab_preview:
         report_text += f"■ ネクストアクション\n"
         
         for idx, act in enumerate(target_data['actions']):
-            # --- 修正: 自由入力の場合のテキスト反映 ---
-            s_adv = act.get('standardAdvice', 'custom')
-            if s_adv == 'custom':
-                adv_str = act.get('customAdvice', '（特になし）')
-            else:
-                adv_str = STANDARD_ADVICE.get(s_adv, "")
-            
-            report_text += f"{idx+1}. 【{act['subject']}】 {act['specificTask']}\n   (Pt:{adv_str} / {act['deadline']})\n"
+            # 型（Pt）の表示を削除
+            report_text += f"{idx+1}. 【{act['subject']}】 {act['specificTask']}\n   (期限: {act['deadline']})\n"
         
         st.code(report_text)
         st.caption("右上のコピーボタンでコピーできます")
