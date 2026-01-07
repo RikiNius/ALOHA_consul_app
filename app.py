@@ -20,7 +20,6 @@ SCORE_LABELS_NIJI = {
 }
 
 # 表示用のラベル変換マップ（共通テスト用）
-# ※文理で入力項目が変わるため、すべての可能性を網羅しておきます
 SCORE_LABELS_KYOTSU = {
     'eng_r': '英語R', 'eng_l': '英語L',
     'math_1': '数IA', 'math_2': '数IIBC',
@@ -30,7 +29,6 @@ SCORE_LABELS_KYOTSU = {
     'k_sci_base1': '理科基礎①', 'k_sci_base2': '理科基礎②',
     # 理系用
     'k_sci1': '理科①', 'k_sci2': '理科②'
-    # 理系の社会①②は k_soc1, k_soc2 を共用
 }
 
 # --- データベース接続 (Google Sheets) ---
@@ -82,31 +80,34 @@ def save_data(new_row_df):
 
 # --- 初期化関数 (Reset) ---
 def init_session_state():
-    # アクションリストの初期化
+    # アクションリストの初期化（policyを追加）
     if 'actions' not in st.session_state:
         st.session_state.actions = [
-            {'subject': '英語', 'priority': '高', 'specificTask': '鉄壁 Section 1-5', 'deadline': '次回まで'}
+            {'subject': '英語', 'priority': '高', 'policy': '', 'specificTask': '鉄壁 Section 1-5', 'deadline': '次回まで'}
         ]
 
 def clear_inputs():
-    """入力フォームのリセット処理"""
-    keys_to_clear = [
-        "in_mentor", "in_student", "in_stream", "in_date", "in_grade", "in_target",
-        "in_exam", "in_exam_type", "in_issue",
-        # 二次試験用
+    """入力フォームのリセット処理（値を明示的に空にする）"""
+    # テキスト入力系
+    text_keys = [
+        "in_mentor", "in_student", "in_target", "in_exam", "in_issue",
+        # 二次試験
         "in_s_eng", "in_s_math", "in_s_jp", "in_s_sci1", "in_s_sci2", "in_s_soc1", "in_s_soc2",
-        # 共通テスト用（共通）
+        # 共通テスト
         "in_k_eng_r", "in_k_eng_l", "in_k_math_1", "in_k_math_2", "in_k_jp", "in_k_info",
-        # 共通テスト用（文理別）
         "in_k_soc1", "in_k_soc2", "in_k_sci_base1", "in_k_sci_base2", "in_k_sci1", "in_k_sci2"
     ]
-    for key in keys_to_clear:
+    for key in text_keys:
         if key in st.session_state:
-            del st.session_state[key]
+            st.session_state[key] = ""
+
+    # セレクトボックス等の初期化（必要に応じて）
+    if "in_grade" in st.session_state:
+        st.session_state["in_grade"] = "高3"
     
-    # アクションも初期状態に戻す
+    # アクションリストの初期化
     st.session_state.actions = [
-        {'subject': '英語', 'priority': '高', 'specificTask': '鉄壁 Section 1-5', 'deadline': '次回まで'}
+        {'subject': '英語', 'priority': '高', 'policy': '', 'specificTask': '鉄壁 Section 1-5', 'deadline': '次回まで'}
     ]
 
 init_session_state()
@@ -126,7 +127,7 @@ with tab_new:
     def add_action(stream_val):
         initial_subject = SUBJECTS[stream_val][0]
         st.session_state.actions.append({
-            'subject': initial_subject, 'priority': '中', 'specificTask': '', 'deadline': '1週間後'
+            'subject': initial_subject, 'priority': '中', 'policy': '', 'specificTask': '', 'deadline': '1週間後'
         })
     def remove_action(index):
         st.session_state.actions.pop(index)
@@ -171,8 +172,7 @@ with tab_new:
             with sc[4]: scores['soc2'] = st.text_input("社会②", key="in_s_soc2")
     
     else:
-        # === 共通テスト（変更箇所） ===
-        # 共通科目
+        # === 共通テスト ===
         st.markdown("**基礎科目**")
         kc1, kc2, kc3 = st.columns(3)
         with kc1: 
@@ -185,19 +185,16 @@ with tab_new:
             scores['jp'] = st.text_input("国語", key="in_k_jp")
             scores['info'] = st.text_input("情報", key="in_k_info")
         
-        # 文理別科目
         st.markdown("**理科・社会**")
         ks1, ks2, ks3, ks4 = st.columns(4)
         
         if stream == "文系":
-            # 文系: 社会①, 社会②, 理科基礎①, 理科基礎②
             with ks1: scores['k_soc1'] = st.text_input("社会①", key="in_k_soc1")
             with ks2: scores['k_soc2'] = st.text_input("社会②", key="in_k_soc2")
             with ks3: scores['k_sci_base1'] = st.text_input("理科基礎①", key="in_k_sci_base1")
             with ks4: scores['k_sci_base2'] = st.text_input("理科基礎②", key="in_k_sci_base2")
         else:
-            # 理系: 社会①, 社会②, 理科①, 理科②
-            with ks1: scores['k_soc1'] = st.text_input("社会①", key="in_k_soc1_r") # keyを変えて重複回避
+            with ks1: scores['k_soc1'] = st.text_input("社会①", key="in_k_soc1_r")
             with ks2: scores['k_soc2'] = st.text_input("社会②", key="in_k_soc2_r")
             with ks3: scores['k_sci1'] = st.text_input("理科①", key="in_k_sci1")
             with ks4: scores['k_sci2'] = st.text_input("理科②", key="in_k_sci2")
@@ -210,7 +207,7 @@ with tab_new:
     st.caption("ネクストアクション")
     for i, action in enumerate(st.session_state.actions):
         with st.expander(f"Action {i+1}: {action['subject']}", expanded=True):
-            # 「型」を削除し、レイアウト調整
+            # 1行目: 教科・優先度・期限
             ac1, ac2, ac3 = st.columns([2, 1, 2])
             with ac1:
                 subj_list = SUBJECTS[stream]
@@ -223,7 +220,10 @@ with tab_new:
             with ac3:
                 st.session_state.actions[i]['deadline'] = st.text_input("期限", action['deadline'], key=f"d_{i}")
             
-            # タスク内容は大きく表示
+            # 2行目: 方針（自由入力）
+            st.session_state.actions[i]['policy'] = st.text_input("方針設定", action.get('policy', ''), key=f"pol_{i}", placeholder="例: 部分点を確実に取るための記述強化")
+
+            # 3行目: 具体的タスク
             st.session_state.actions[i]['specificTask'] = st.text_input("具体的タスク", action['specificTask'], key=f"t_{i}", placeholder="例: 鉄壁Section1-5を毎日実施")
             
             if st.button("削除", key=f"del_{i}"):
@@ -262,7 +262,7 @@ with tab_new:
             
             if save_data(new_row):
                 st.success("保存しました！")
-                clear_inputs()
+                clear_inputs() # フォームをリセット
                 st.rerun()
             else:
                 if not DB_MODE:
@@ -341,11 +341,13 @@ with tab_search:
                                 st.caption("点数データなし")
 
                         st.write("■ アクション")
-                        # 修正箇所: インデントを正しく修正済み
                         for act in detail.get('actions', []):
-                            # 「型」を表示せず、タスクと期限のみ表示
+                            # 方針がある場合は表示
+                            policy_text = act.get('policy', '')
+                            policy_display = f"【方針】{policy_text} / " if policy_text else ""
+                            
                             st.write(f"- 【{act['subject']}】 **{act['specificTask']}**")
-                            st.caption(f"　 └ 優先度: {act.get('priority','-')} / 期限: {act['deadline']}")
+                            st.caption(f"　 └ {policy_display}優先度: {act.get('priority','-')} (期限: {act['deadline']})")
                             
                     except json.JSONDecodeError:
                         st.error("データの形式が正しくありません。")
@@ -376,31 +378,44 @@ with tab_preview:
         if df.empty:
             st.warning("保存されたデータがありません。")
         else:
+            # --- 修正: レポート用の検索機能 ---
+            st.caption("検索フィルタ")
+            rep_search = st.text_input("生徒名で絞り込み", key="rep_search_input")
+            
             df_sorted = df.sort_index(ascending=False)
-            def format_report_func(x):
-                r = df_sorted.loc[x]
-                return f"{r.get('日付', '')} - {r.get('生徒氏名', '')}"
             
-            rep_idx = st.selectbox("レポートにする記録を選択", df_sorted.index.tolist(), format_func=format_report_func)
+            # フィルタリング適用
+            if rep_search:
+                if '生徒氏名' in df_sorted.columns:
+                    df_sorted = df_sorted[df_sorted['生徒氏名'].str.contains(rep_search, na=False)]
             
-            if rep_idx is not None:
-                row = df_sorted.loc[rep_idx]
-                json_raw = row.get('データJSON')
-                if json_raw:
-                    try:
-                        d = json.loads(json_raw)
-                        target_data = {
-                            "date": row.get('日付'),
-                            "mentor": row.get('担当メンター'),
-                            "student": row.get('生徒氏名'),
-                            "grade": row.get('学年'),
-                            "stream": row.get('文理'),
-                            "target": row.get('志望科類'),
-                            "issue": row.get('課題'),
-                            "actions": d.get('actions', [])
-                        }
-                    except:
-                        st.error("データの読み込みに失敗しました")
+            if df_sorted.empty:
+                st.warning("該当するデータが見つかりません。")
+            else:
+                def format_report_func(x):
+                    r = df_sorted.loc[x]
+                    return f"{r.get('日付', '')} - {r.get('生徒氏名', '')}"
+                
+                rep_idx = st.selectbox("レポートにする記録を選択", df_sorted.index.tolist(), format_func=format_report_func)
+                
+                if rep_idx is not None:
+                    row = df_sorted.loc[rep_idx]
+                    json_raw = row.get('データJSON')
+                    if json_raw:
+                        try:
+                            d = json.loads(json_raw)
+                            target_data = {
+                                "date": row.get('日付'),
+                                "mentor": row.get('担当メンター'),
+                                "student": row.get('生徒氏名'),
+                                "grade": row.get('学年'),
+                                "stream": row.get('文理'),
+                                "target": row.get('志望科類'),
+                                "issue": row.get('課題'),
+                                "actions": d.get('actions', [])
+                            }
+                        except:
+                            st.error("データの読み込みに失敗しました")
 
     # レポート生成
     if target_data:
@@ -412,8 +427,11 @@ with tab_preview:
         report_text += f"■ ネクストアクション\n"
         
         for idx, act in enumerate(target_data['actions']):
-            # 型（Pt）の表示を削除
-            report_text += f"{idx+1}. 【{act['subject']}】 {act['specificTask']}\n   (期限: {act['deadline']})\n"
+            # 方針を含めて出力
+            p_text = act.get('policy', '')
+            p_str = f"方針: {p_text} / " if p_text else ""
+            
+            report_text += f"{idx+1}. 【{act['subject']}】 {act['specificTask']}\n   ({p_str}期限: {act['deadline']})\n"
         
         st.code(report_text)
         st.caption("右上のコピーボタンでコピーできます")
