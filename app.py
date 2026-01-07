@@ -8,13 +8,14 @@ st.set_page_config(page_title="ALOHA Mentoring Base", layout="wide")
 
 # --- マスタデータ（定数） ---
 SUBJECTS = {
-    '理系': ['英語', '数学(理系)', '国語', '物理', '化学', '生物'],
-    '文系': ['英語', '数学(文系)', '国語', '世界史', '日本史', '地理']
+    '理系': ['英語', '数学(理系)', '現代文', '古文', '漢文', '物理', '化学', '生物'],
+    '文系': ['英語', '数学(文系)', '現代文', '古文', '漢文', '世界史', '日本史', '地理']
 }
 
 # 表示用のラベル変換マップ（二次試験用）
 SCORE_LABELS_NIJI = {
-    'eng': '英語', 'math': '数学', 'jp': '国語',
+    'eng': '英語', 'math': '数学',
+    'jp_mod': '現代文', 'jp_anc': '古文', 'jp_chi': '漢文', # 国語を3分割
     'sci1': '理科①', 'sci2': '理科②',
     'soc1': '社会①', 'soc2': '社会②'
 }
@@ -23,11 +24,10 @@ SCORE_LABELS_NIJI = {
 SCORE_LABELS_KYOTSU = {
     'eng_r': '英語R', 'eng_l': '英語L',
     'math_1': '数IA', 'math_2': '数IIBC',
-    'jp': '国語', 'info': '情報',
-    # 文系用
+    'jp_mod': '現代文', 'jp_anc': '古文', 'jp_chi': '漢文', # 国語を3分割
+    'info': '情報',
     'k_soc1': '社会①', 'k_soc2': '社会②',
     'k_sci_base1': '理科基礎①', 'k_sci_base2': '理科基礎②',
-    # 理系用
     'k_sci1': '理科①', 'k_sci2': '理科②'
 }
 
@@ -78,39 +78,46 @@ def save_data(new_row_df):
         st.session_state.demo_data = updated_df
         return True
 
-# --- 初期化関数 (Reset) ---
+# --- 初期化・リセット関数 ---
 def init_session_state():
-    # アクションリストの初期化（policyを追加）
     if 'actions' not in st.session_state:
         st.session_state.actions = [
             {'subject': '英語', 'priority': '高', 'policy': '', 'specificTask': '鉄壁 Section 1-5', 'deadline': '次回まで'}
         ]
 
 def clear_inputs():
-    """入力フォームのリセット処理（値を明示的に空にする）"""
-    # テキスト入力系
+    """入力フォームのリセット処理"""
+    # テキスト入力系のキー
     text_keys = [
         "in_mentor", "in_student", "in_target", "in_exam", "in_issue",
-        # 二次試験
-        "in_s_eng", "in_s_math", "in_s_jp", "in_s_sci1", "in_s_sci2", "in_s_soc1", "in_s_soc2",
-        # 共通テスト
-        "in_k_eng_r", "in_k_eng_l", "in_k_math_1", "in_k_math_2", "in_k_jp", "in_k_info",
+        # 二次試験 (国語3つに変更)
+        "in_s_eng", "in_s_math", "in_s_jp_mod", "in_s_jp_anc", "in_s_jp_chi", 
+        "in_s_sci1", "in_s_sci2", "in_s_soc1", "in_s_soc2",
+        # 共通テスト (国語3つに変更)
+        "in_k_eng_r", "in_k_eng_l", "in_k_math_1", "in_k_math_2", 
+        "in_k_jp_mod", "in_k_jp_anc", "in_k_jp_chi", "in_k_info",
         "in_k_soc1", "in_k_soc2", "in_k_sci_base1", "in_k_sci_base2", "in_k_sci1", "in_k_sci2"
     ]
+    
     for key in text_keys:
         if key in st.session_state:
             st.session_state[key] = ""
 
-    # セレクトボックス等の初期化（必要に応じて）
     if "in_grade" in st.session_state:
         st.session_state["in_grade"] = "高3"
     
-    # アクションリストの初期化
     st.session_state.actions = [
         {'subject': '英語', 'priority': '高', 'policy': '', 'specificTask': '鉄壁 Section 1-5', 'deadline': '次回まで'}
     ]
 
+# 1. セッション初期化
 init_session_state()
+
+# 2. リセットフラグの確認と実行
+if st.session_state.get("needs_clear", False):
+    clear_inputs()
+    st.session_state["needs_clear"] = False 
+    st.toast("保存し、入力内容をリセットしました", icon="✅")
 
 # --- UI構築 ---
 
@@ -159,31 +166,49 @@ with tab_new:
     
     # === 模試入力エリア ===
     if exam_type == "東大二次(本番レベル)":
-        sc = st.columns(5)
-        with sc[0]: scores['eng'] = st.text_input("英語", key="in_s_eng")
-        with sc[1]: scores['math'] = st.text_input("数学", key="in_s_math")
-        with sc[2]: scores['jp'] = st.text_input("国語", key="in_s_jp")
+        # 1行目: 英・数
+        r1_c1, r1_c2 = st.columns(2)
+        with r1_c1: scores['eng'] = st.text_input("英語", key="in_s_eng")
+        with r1_c2: scores['math'] = st.text_input("数学", key="in_s_math")
         
+        # 2行目: 国語3科目
+        r2_c1, r2_c2, r2_c3 = st.columns(3)
+        with r2_c1: scores['jp_mod'] = st.text_input("現代文", key="in_s_jp_mod")
+        with r2_c2: scores['jp_anc'] = st.text_input("古文", key="in_s_jp_anc")
+        with r2_c3: scores['jp_chi'] = st.text_input("漢文", key="in_s_jp_chi")
+        
+        # 3行目: 理社
+        r3_c1, r3_c2 = st.columns(2)
         if stream == "理系":
-            with sc[3]: scores['sci1'] = st.text_input("理科①", key="in_s_sci1")
-            with sc[4]: scores['sci2'] = st.text_input("理科②", key="in_s_sci2")
+            with r3_c1: scores['sci1'] = st.text_input("理科①", key="in_s_sci1")
+            with r3_c2: scores['sci2'] = st.text_input("理科②", key="in_s_sci2")
         else:
-            with sc[3]: scores['soc1'] = st.text_input("社会①", key="in_s_soc1")
-            with sc[4]: scores['soc2'] = st.text_input("社会②", key="in_s_soc2")
+            with r3_c1: scores['soc1'] = st.text_input("社会①", key="in_s_soc1")
+            with r3_c2: scores['soc2'] = st.text_input("社会②", key="in_s_soc2")
     
     else:
         # === 共通テスト ===
-        st.markdown("**基礎科目**")
-        kc1, kc2, kc3 = st.columns(3)
+        st.markdown("**主要科目**")
+        # 英語・数学
+        kc1, kc2 = st.columns(2)
         with kc1: 
-            scores['eng_r'] = st.text_input("英語R", key="in_k_eng_r")
-            scores['eng_l'] = st.text_input("英語L", key="in_k_eng_l")
+            st.caption("英語")
+            c_e1, c_e2 = st.columns(2)
+            with c_e1: scores['eng_r'] = st.text_input("英語R", key="in_k_eng_r")
+            with c_e2: scores['eng_l'] = st.text_input("英語L", key="in_k_eng_l")
         with kc2:
-            scores['math_1'] = st.text_input("数IA", key="in_k_math_1")
-            scores['math_2'] = st.text_input("数IIBC", key="in_k_math_2")
-        with kc3:
-            scores['jp'] = st.text_input("国語", key="in_k_jp")
-            scores['info'] = st.text_input("情報", key="in_k_info")
+            st.caption("数学")
+            c_m1, c_m2 = st.columns(2)
+            with c_m1: scores['math_1'] = st.text_input("数IA", key="in_k_math_1")
+            with c_m2: scores['math_2'] = st.text_input("数IIBC", key="in_k_math_2")
+            
+        # 国語・情報
+        st.caption("国語・情報")
+        kc_j1, kc_j2, kc_j3, kc_i = st.columns(4)
+        with kc_j1: scores['jp_mod'] = st.text_input("現代文", key="in_k_jp_mod")
+        with kc_j2: scores['jp_anc'] = st.text_input("古文", key="in_k_jp_anc")
+        with kc_j3: scores['jp_chi'] = st.text_input("漢文", key="in_k_jp_chi")
+        with kc_i:  scores['info'] = st.text_input("情報", key="in_k_info")
         
         st.markdown("**理科・社会**")
         ks1, ks2, ks3, ks4 = st.columns(4)
@@ -207,11 +232,14 @@ with tab_new:
     st.caption("ネクストアクション")
     for i, action in enumerate(st.session_state.actions):
         with st.expander(f"Action {i+1}: {action['subject']}", expanded=True):
-            # 1行目: 教科・優先度・期限
             ac1, ac2, ac3 = st.columns([2, 1, 2])
             with ac1:
                 subj_list = SUBJECTS[stream]
-                s_idx = subj_list.index(action['subject']) if action['subject'] in subj_list else 0
+                # 教科リストに含まれていない教科が保存されていた場合の対策
+                try:
+                    s_idx = subj_list.index(action['subject'])
+                except ValueError:
+                    s_idx = 0
                 st.session_state.actions[i]['subject'] = st.selectbox("教科", subj_list, index=s_idx, key=f"s_{i}")
             with ac2:
                 p_opts = ["高", "中", "低"]
@@ -220,10 +248,7 @@ with tab_new:
             with ac3:
                 st.session_state.actions[i]['deadline'] = st.text_input("期限", action['deadline'], key=f"d_{i}")
             
-            # 2行目: 方針（自由入力）
             st.session_state.actions[i]['policy'] = st.text_input("方針設定", action.get('policy', ''), key=f"pol_{i}", placeholder="例: 部分点を確実に取るための記述強化")
-
-            # 3行目: 具体的タスク
             st.session_state.actions[i]['specificTask'] = st.text_input("具体的タスク", action['specificTask'], key=f"t_{i}", placeholder="例: 鉄壁Section1-5を毎日実施")
             
             if st.button("削除", key=f"del_{i}"):
@@ -261,13 +286,12 @@ with tab_new:
             }])
             
             if save_data(new_row):
-                st.success("保存しました！")
-                clear_inputs() # フォームをリセット
+                st.session_state["needs_clear"] = True
                 st.rerun()
             else:
                 if not DB_MODE:
                     st.warning("⚠️ データベース未設定のため、一時保存しました（リロードで消えます）。")
-                    clear_inputs()
+                    st.session_state["needs_clear"] = True
                     st.rerun()
 
 # ==========================================
@@ -342,7 +366,6 @@ with tab_search:
 
                         st.write("■ アクション")
                         for act in detail.get('actions', []):
-                            # 方針がある場合は表示
                             policy_text = act.get('policy', '')
                             policy_display = f"【方針】{policy_text} / " if policy_text else ""
                             
@@ -378,13 +401,11 @@ with tab_preview:
         if df.empty:
             st.warning("保存されたデータがありません。")
         else:
-            # --- 修正: レポート用の検索機能 ---
             st.caption("検索フィルタ")
             rep_search = st.text_input("生徒名で絞り込み", key="rep_search_input")
             
             df_sorted = df.sort_index(ascending=False)
             
-            # フィルタリング適用
             if rep_search:
                 if '生徒氏名' in df_sorted.columns:
                     df_sorted = df_sorted[df_sorted['生徒氏名'].str.contains(rep_search, na=False)]
@@ -427,7 +448,6 @@ with tab_preview:
         report_text += f"■ ネクストアクション\n"
         
         for idx, act in enumerate(target_data['actions']):
-            # 方針を含めて出力
             p_text = act.get('policy', '')
             p_str = f"方針: {p_text} / " if p_text else ""
             
