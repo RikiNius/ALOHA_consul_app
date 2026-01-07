@@ -349,3 +349,93 @@ with tab_search:
 
                         st.write("■ アクション")
                         for act in detail.get('actions', []):
+                            # アドバイスの表示
+                            adv_key = act.get('standardAdvice', 'custom')
+                            if adv_key == 'custom':
+                                # 自由入力の内容を表示
+                                adv_text = act.get('customAdvice', '（詳細なし）')
+                            else:
+                                adv_text = STANDARD_ADVICE.get(adv_key, "")
+                            
+                            st.write(f"- 【{act['subject']}】 **{act['specificTask']}**")
+                            st.caption(f"　 └ 方針: {adv_text} (期限: {act['deadline']})")
+                            
+                    except json.JSONDecodeError:
+                        st.error("データの形式が正しくありません。")
+
+# ==========================================
+# 3. プレビュー（出力）タブ
+# ==========================================
+with tab_preview:
+    st.subheader("レポート出力")
+    
+    # --- 修正: 出力対象の選択 ---
+    report_source = st.radio("出力するデータを選択", ["現在入力中の内容", "過去の保存データ"], horizontal=True)
+
+    target_data = {}
+    
+    if report_source == "現在入力中の内容":
+        target_data = {
+            "date": date_val.strftime('%Y/%m/%d'),
+            "mentor": mentor_name,
+            "student": student_name,
+            "grade": grade,
+            "stream": stream,
+            "target": target,
+            "issue": current_issue,
+            "actions": st.session_state.actions
+        }
+    else:
+        # 過去データの選択UI
+        df = load_data()
+        if df.empty:
+            st.warning("保存されたデータがありません。")
+        else:
+            # 検索タブと同様の選択ロジック
+            df_sorted = df.sort_index(ascending=False)
+            def format_report_func(x):
+                r = df_sorted.loc[x]
+                return f"{r.get('日付', '')} - {r.get('生徒氏名', '')}"
+            
+            rep_idx = st.selectbox("レポートにする記録を選択", df_sorted.index.tolist(), format_func=format_report_func)
+            
+            if rep_idx is not None:
+                row = df_sorted.loc[rep_idx]
+                json_raw = row.get('データJSON')
+                if json_raw:
+                    try:
+                        d = json.loads(json_raw)
+                        target_data = {
+                            "date": row.get('日付'),
+                            "mentor": row.get('担当メンター'),
+                            "student": row.get('生徒氏名'),
+                            "grade": row.get('学年'),
+                            "stream": row.get('文理'),
+                            "target": row.get('志望科類'),
+                            "issue": row.get('課題'),
+                            "actions": d.get('actions', [])
+                        }
+                    except:
+                        st.error("データの読み込みに失敗しました")
+
+    # レポート生成
+    if target_data:
+        report_text = f"【東大志望者面談シート】\n"
+        report_text += f"日付: {target_data['date']} / 担当: {target_data['mentor']}\n"
+        report_text += f"生徒: {target_data['student']} ({target_data['grade']})\n"
+        report_text += f"文理: {target_data['stream']} / 志望: {target_data['target']}\n"
+        report_text += f"課題: {target_data['issue']}\n\n"
+        report_text += f"■ ネクストアクション\n"
+        
+        for idx, act in enumerate(target_data['actions']):
+            # --- 修正: 自由入力の場合のテキスト反映 ---
+            s_adv = act.get('standardAdvice', 'custom')
+            if s_adv == 'custom':
+                adv_str = act.get('customAdvice', '（特になし）')
+            else:
+                adv_str = STANDARD_ADVICE.get(s_adv, "")
+            
+            report_text += f"{idx+1}. 【{act['subject']}】 {act['specificTask']}\n   (Pt:{adv_str} / {act['deadline']})\n"
+        
+        st.code(report_text)
+        st.caption("右上のコピーボタンでコピーできます")
