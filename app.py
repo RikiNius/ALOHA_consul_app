@@ -4,6 +4,7 @@ import datetime
 import json
 
 # --- 設定 ---
+# ブラウザのタブ名
 st.set_page_config(page_title="ALOHA Mentoring Base", layout="wide")
 
 # --- マスタデータ（定数） ---
@@ -90,7 +91,7 @@ def init_session_state():
 
 def clear_inputs():
     """入力フォームのリセット処理"""
-    # テキスト入力系のキー
+    # 1. 固定のテキスト入力系キーをリセット
     text_keys = [
         "in_mentor", "in_student", "in_target", "in_exam", "in_issue",
         # 二次試験
@@ -109,13 +110,27 @@ def clear_inputs():
         if key in st.session_state:
             st.session_state[key] = ""
 
-    # 学年の初期値（リセット時は高3に戻す設定）
+    # 2. 学年の初期値（リセット時は高3に戻す設定）
     if "in_grade" in st.session_state:
         st.session_state["in_grade"] = "高3"
     
+    # 3. アクションデータの構造をリセット
     st.session_state.actions = [
         {'subject': '英語', 'priority': '高', 'policy': '', 'specificTask': '鉄壁 Section 1-5', 'deadline': '次回まで'}
     ]
+    
+    # 4. 【重要】アクション用の動的ウィジェットキー(s_0, t_0など)をSessionStateから完全削除
+    #    これをしないと、画面上の入力値が古いまま残ります。
+    keys_to_delete = []
+    for key in st.session_state:
+        # キーの形式が "prefix_数値" (例: t_0, pol_1) のものを探す
+        if key.startswith(("s_", "p_", "d_", "pol_", "t_")):
+            parts = key.split("_")
+            if len(parts) == 2 and parts[1].isdigit():
+                keys_to_delete.append(key)
+    
+    for k in keys_to_delete:
+        del st.session_state[k]
 
 # 1. セッション初期化
 init_session_state()
@@ -128,7 +143,7 @@ if st.session_state.get("needs_clear", False):
 
 # --- UI構築 ---
 
-st.title("🎓 UTokyo Mentoring Base")
+st.title("🎓 ALOHA Mentoring Base")
 
 tab_new, tab_search, tab_preview = st.tabs(["📝 新規面談・保存", "🔍 過去ログ検索", "📄 レポート出力"])
 
@@ -156,9 +171,8 @@ with tab_new:
         with c2:
             date_val = st.date_input("実施日", datetime.date.today(), key="in_date")
             
-            # --- 修正: 学年の選択肢変更 ---
+            # 学年の選択肢
             grade_options = ["中1", "中2", "中3", "高1", "高2", "高3", "既卒"]
-            # デフォルトで「高3」を選択状態にする（リスト内のindexを取得）
             default_grade_idx = grade_options.index("高3")
             grade = st.selectbox("学年", grade_options, index=default_grade_idx, key="in_grade")
             
